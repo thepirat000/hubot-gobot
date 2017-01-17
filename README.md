@@ -26,10 +26,10 @@ Then add **hubot-gobot** to your `external-scripts.json`:
 
 You need to specify the following environment variables:
 
-- HUBOT_GOCI_EVENT_NOTIFIER_ROOM: The room to send notifications to
-- HUBOT_GOCI_SERVER: The GoCD server host name
+- HUBOT_GOCI_EVENT_NOTIFIER_ROOM: The room to send notifications. i.e. #gocd
+- HUBOT_GOCI_SERVER: The GoCD server host name.
 - HUBOT_GOCI_TIMEZONE: (optional) The timezone on GoCD server, i.e. +07:00
-- HUBOT_GOCI_PROJECTNAME_REGEXP: (optional) Regular expression to match the pipeline/stage/job names to consider
+- HUBOT_GOCI_PROJECTNAME_REGEXP: (optional) Regular expression to match the pipeline/stage/job names to consider.
 
 If your GoCD server requires authentication to access cctray.xml you can provide them by setting the environment variables:
 
