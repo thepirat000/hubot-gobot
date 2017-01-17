@@ -27,7 +27,6 @@
 fs = require('fs')
 cron = require('cron')
 _ = require('underscore')
-parser = require './util/parser'
 xml2js = require 'xml2js'
 
 parse_cctray = (xml, regExp) ->
