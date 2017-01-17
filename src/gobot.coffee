@@ -104,8 +104,7 @@ module.exports = (robot) ->
 
   robot.brain.on 'loaded', ->
     loadConfig(robot)
-    updateBrain(robot)
-    
+    crontTick(robot)
 
 # private functions
 configGet = (robot, msg) ->
@@ -227,10 +226,14 @@ crontTick = (robot) ->
   fetchAndCompareData robot, (changes) ->
     if config.room?
       for change in changes
+        pipeline = (change.name.split " :: ")[0]
+        buildLabel = change.lastBuildLabel
+        pipelineId = buildLabel.replace(/\D/g,'')     
+        mapUrl = pipelineMapUrl(pipeline, pipelineId)   
         if "Fixed" == change.type
-          robot.messageRoom config.room, { text: "*@channel :+1: Good news*", attachments: [{ title: '*#{change.name} is green again in ##{change.lastBuildLabel}*', color: 'good' }] }
+          robot.messageRoom config.room, { text: "*@channel :+1: Good news*", attachments: [{ title: change.name + ' is green again in #<' + mapUrl + '|' + change.lastBuildLabel + '>', color: 'good' }] }
         else if "Failed" == change.type
-          robot.messageRoom config.room, { text: "*@channel :-1: Bad news*", attachments: [{ title: '*#{change.name} FAILED in ##{change.lastBuildLabel}*', color: 'danger' }] }
+          robot.messageRoom config.room, { text: "*@channel :-1: Bad news*", attachments: [{ title: change.name + ' FAILED in #<' + mapUrl + '|' + change.lastBuildLabel + '>', color: 'danger' }] }
   updateBrain(robot)
 
 startCronJob = (robot) ->
