@@ -3,7 +3,7 @@
 call npm install
 SETLOCAL
 SET PATH=node_modules\.bin;node_modules\hubot\node_modules\.bin;%PATH%
-SET HUBOT_SLACK_TOKEN=xoxb-127995828501-BGgKH4BzcEkDxP4q64YjhBmI
+SET HUBOT_SLACK_TOKEN=xoxb-127995828501-vrDNj4vlAJRIkaarWmZqw3zX
 
 SET HUBOT_GOCI_EVENT_NOTIFIER_ROOM=#gocd
 SET HUBOT_GOCI_SERVER=4usdlaws000110

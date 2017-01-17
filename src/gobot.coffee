@@ -47,10 +47,12 @@ cctrayUrl = () ->
 config = 
     server: ""    
     room: ""
+    filter: ""
 
 loadConfig = (robot) ->
     config.room = process.env.HUBOT_GOCI_EVENT_NOTIFIER_ROOM
     config.server = process.env.HUBOT_GOCI_SERVER
+    config.filter = process.env.HUBOT_GOCI_PROJECTNAME_REGEXP
     for k in Object.keys(config)
         if robot.brain.data.config.hasOwnProperty(k)
             config[k] = robot.brain.data.config[k]
@@ -61,11 +63,9 @@ loadConfig = (robot) ->
 
 # MAIN
 module.exports = (robot) ->
-  console.warn("Initializing")
   robot.brain.data.gociProjects or= { }
   robot.brain.data.config or= { }
   
-  updateBrain(robot)
   startCronJob(robot)
 
   robot.respond /build status/i, (msg) ->
@@ -101,7 +101,7 @@ module.exports = (robot) ->
 
   robot.brain.on 'loaded', ->
     loadConfig(robot)
-    console.info(JSON.stringify robot.brain.data.config)
+    updateBrain(robot)
     
 
 # private functions
@@ -135,12 +135,14 @@ buildStatus = (robot, msg) ->
         for project in fgi[pipeline]
             if "Failure" == project.lastBuildStatus
                 failed = true
+                unixDt = Date.parse(project.lastBuildTime + process.env.HUBOT_GOCI_TIMEZONE).valueOf() / 1000
                 name = project.name.split " :: "
                 if (name.length is 3)
                     stage = name[1]
                     job = name[2]
                     attch = 
                         title: 'Stage ' + stage + ' - Job <' + project.webUrl + '|' + job + '> FAILED'
+                        footer: 'Last build: <!date^' + unixDt + '^{date_long_pretty} {time}^' + project.webUrl + '|stage>'
                         color: 'danger'
                     message.attachments.push attch
         if failed           
@@ -158,24 +160,16 @@ buildDetails = (robot, msg) ->
         if cmdRegExp? and not pipeline.match(cmdRegExp)
             continue
         noPipelines = false
-        message = { username: process.env.HUBOT_SLACK_BOTNAME, text: '*' + pipeline + '* (' + fgi[pipeline][0].lastBuildLabel + ')', attachments: [] }
+        message = { text: 'Pipeline *_' + pipeline + '_* (' + fgi[pipeline][0].lastBuildLabel + ')', attachments: [] }
         for project in fgi[pipeline]
             name = project.name.split " :: "
             unixDt = Date.parse(project.lastBuildTime + process.env.HUBOT_GOCI_TIMEZONE).valueOf() / 1000
             if (name.length is 2) #it's a pipeline-stage project name
                 attch = {
-                    title: '<' + project.webUrl + '|' + name[1] + '> (' + project.lastBuildLabel + ')',
+                    title: '<' + project.webUrl + '|' + name[1] + '>: ' + project.lastBuildStatus,
+                    mrkdwn_in: ['title'],
                     color: if project.lastBuildStatus is "Failure" then "danger" else "good",
-                    fields: [{
-                        "title": "Last build",
-                        "value": '<!date^' + unixDt + '^{date_long_pretty} {time}^' + project.webUrl + '|stage>',
-                        "short": true
-                    },
-                    {
-                        "title": "Status",
-                        "value": "#{project.lastBuildStatus}",
-                        "short": true
-                    }],
+                    footer: 'Last build: <!date^' + unixDt + '^{date_long_pretty} {time}^' + project.webUrl + '|stage>'
                 }
                 message.attachments.push attch
         msg.send(message)
@@ -201,7 +195,7 @@ parseData = (robot, callback) ->
   request.get() (err, res, body) ->
     if not err
       try
-        regExp = new RegExp(process.env.HUBOT_GOCI_PROJECTNAME_REGEXP ? '.*', 'i')
+        regExp = new RegExp(config.filter ? '.*', 'i')
         projects = parse_cctray(body, regExp)
         callback? projects
       catch e
