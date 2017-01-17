@@ -39,8 +39,8 @@ If your GoCD server requires authentication to access cctray.xml you can provide
 ## Sample Interaction
 
 ```
-user1>> hubot hello
-hubot>> hello!
+user1>> hubot build status
+hubot>> Good news, everyone! All green!
 ```
 
 ## NPM Module
