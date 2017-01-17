@@ -44,6 +44,9 @@ parse_cctray = (xml, regExp) ->
 cctrayUrl = () ->
     "http://#{config.server}:8153/go/cctray.xml"
 
+pipelineMapUrl = (pipeline, id) ->
+    "http://#{config.server}:8153/go/pipelines/value_stream_map/#{pipeline}/#{id}"
+
 config = 
     server: ""    
     room: ""
@@ -131,7 +134,9 @@ buildStatus = (robot, msg) ->
     fgi = _.groupBy robot.brain.data.gociProjects, (project) -> (project.name.split " :: ")[0]
     for pipeline in Object.keys(fgi)
         failed = false
-        message = { username: process.env.HUBOT_SLACK_BOTNAME, text: '*' + pipeline + '* (' + fgi[pipeline][0].lastBuildLabel + ')  is broken!', attachments: [] }
+        buildLabel = fgi[pipeline][0].lastBuildLabel
+        pipelineId = buildLabel.replace(/\D/g,'')        
+        message = { text: '*_' + pipeline + '_* (<' + pipelineMapUrl(pipeline, pipelineId) + '|' + buildLabel + '>)  is broken!', attachments: [] }
         for project in fgi[pipeline]
             if "Failure" == project.lastBuildStatus
                 failed = true
@@ -141,7 +146,7 @@ buildStatus = (robot, msg) ->
                     stage = name[1]
                     job = name[2]
                     attch = 
-                        title: 'Stage ' + stage + ' - Job <' + project.webUrl + '|' + job + '> FAILED'
+                        title: 'Stage <' + project.webUrl + '|' + stage + '> - Job <' + project.webUrl + '|' + job + '> FAILED'
                         footer: 'Last build: <!date^' + unixDt + '^{date_long_pretty} {time}^' + project.webUrl + '|stage>'
                         color: 'danger'
                     message.attachments.push attch
@@ -160,7 +165,9 @@ buildDetails = (robot, msg) ->
         if cmdRegExp? and not pipeline.match(cmdRegExp)
             continue
         noPipelines = false
-        message = { text: 'Pipeline *_' + pipeline + '_* (' + fgi[pipeline][0].lastBuildLabel + ')', attachments: [] }
+        buildLabel = fgi[pipeline][0].lastBuildLabel
+        pipelineId = buildLabel.replace(/\D/g,'')        
+        message = { text: '*_' + pipeline + '_* (<' + pipelineMapUrl(pipeline, pipelineId) + '|' + buildLabel + '>)', attachments: [] }
         for project in fgi[pipeline]
             name = project.name.split " :: "
             unixDt = Date.parse(project.lastBuildTime + process.env.HUBOT_GOCI_TIMEZONE).valueOf() / 1000
