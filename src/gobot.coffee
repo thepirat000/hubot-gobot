@@ -29,7 +29,7 @@
 #
 # Modifications:
 #   21-01-2017 -- federicoc -- added material and instance info -- v0.0.5
-#   27-01-2017 -- federicoc -- fixed bug on changes detection -- v0.0.6
+#   27-01-2017 -- federicoc -- fixed bug on changes detection -- v0.0.7
 
 fs = require("fs")
 cron = require("cron")
