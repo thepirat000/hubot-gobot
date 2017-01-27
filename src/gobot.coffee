@@ -28,7 +28,8 @@
 #   Federico Colombo, based on fbernitt
 #
 # Modifications:
-#   21-01-2017 -- federicoc -- added material and instance info
+#   21-01-2017 -- federicoc -- added material and instance info -- v0.0.5
+#   27-01-2017 -- federicoc -- fixed bug on changes detection -- v0.0.6
 
 fs = require("fs")
 cron = require("cron")
@@ -168,37 +169,6 @@ configReset = (robot, msg) ->
     loadConfig(robot)
     msg.send "Reset OK"
 
-#Command: build instance {pipeline} {id}
-instanceInfo = (robot, msg) ->
-    pipeline = msg.match[1]
-    id = msg.match[2]
-    fetchInstanceInfo robot, pipeline, id, (p, instance) ->
-        if instance.name?
-            url = pipelineMapUrl(pipeline, id)
-            materials = getRevisions(instance)
-            message = { text: "Pipeline *#{p}* (id: <#{url}|#{id}>)\nMaterials: #{materials}\n", attachments: [] }
-            stage_num = 1
-            for stage in instance.stages
-                job_num = 1
-                stage_result = if stage.result is "Unknown" then "Active" else stage.result
-                for job in stage.jobs
-                    status = if job.state is "Completed" then job.result else job.state
-                    color = if job.result is "Passed" then "good" else if job.result is "Failed" then "danger" else "warning"
-                    emo = if stage.result is "Passed" then ":white_check_mark:" else if stage.result is "Failed" then ":no_entry:" else ":warning:"
-                    attach = {
-                        pretext: if job_num is 1 then "#{emo} Stage #{stage_num}: *#{stage.name}* overall result: *#{stage_result}*" else "",
-                        title: "Job #{job.name} status is #{status}",
-                        mrkdwn_in: ["title", "pretext"],
-                        color: color
-                    }
-                    message.attachments.push attach
-                    job_num++
-                stage_num++
-            msg.send(message)
-        else if instance.error?
-            msg.send(instance.error)
-      
-
 #Command: build status
 buildStatus = (robot, msg) ->
     projects = _.filter robot.brain.data.gociProjects, (project) -> project.job and "Failure" == project.lastBuildStatus
@@ -249,6 +219,36 @@ fetchInstanceInfo = (robot, pipeline, id, callback) ->
         else
             console.warn("Failed to fetch data with error : #{err}")
         callback? pipeline, instance    
+
+#Command: build instance {pipeline} {id}
+instanceInfo = (robot, msg) ->
+    pipeline = msg.match[1]
+    id = msg.match[2]
+    fetchInstanceInfo robot, pipeline, id, (p, instance) ->
+        if instance.name?
+            url = pipelineMapUrl(pipeline, id)
+            materials = getRevisions(instance)
+            message = { text: "Pipeline *#{p}* (id: <#{url}|#{id}>)\nMaterials: #{materials}\n", attachments: [] }
+            stage_num = 1
+            for stage in instance.stages
+                job_num = 1
+                stage_result = if stage.result is "Unknown" then "Active" else stage.result
+                for job in stage.jobs
+                    status = if job.state is "Completed" then job.result else job.state
+                    color = if job.result is "Passed" then "good" else if job.result is "Failed" then "danger" else "warning"
+                    emo = if stage.result is "Passed" then ":white_check_mark:" else if stage.result is "Failed" then ":no_entry:" else ":warning:"
+                    attach = {
+                        pretext: if job_num is 1 then "#{emo} Stage #{stage_num}: *#{stage.name}* overall result: *#{stage_result}*" else "",
+                        title: "Job #{job.name} status is #{status}",
+                        mrkdwn_in: ["title", "pretext"],
+                        color: color
+                    }
+                    message.attachments.push attach
+                    job_num++
+                stage_num++
+            msg.send(message)
+        else if instance.error?
+            msg.send(instance.error)
 
 getRevisions = (instance) ->
     revisions = []
@@ -358,8 +358,8 @@ fetchAndCompareData = (robot, callback) ->
       previous = robot.brain.data.gociProjects[project.name]
       if previous and previous.lastBuildTime != project.lastBuildTime
         changedStatus = if previous.lastBuildStatus == project.lastBuildStatus then "Changed" else if "Success" == project.lastBuildStatus then "Fixed" else "Failed"
-        if (config.trigger == "status" and changedStatus != "changed") or (config.trigger == "date")
-          changes.push {"type": changedStatus, "project": project}
+        if (config.trigger == "status" and changedStatus != "Changed") or (config.trigger == "date")
+          changes.push {"type": changedStatus, "project": project, "previousStatus": previous.lastBuildStatus, "currentStatus": project.lastBuildStatus, "previousBuildTime": previous.lastBuildTime, "currentBuildTime": project.lastBuildTime}
     callback? changes
 
 crontTick = (robot) ->
@@ -367,13 +367,12 @@ crontTick = (robot) ->
     if config.room?
       for change in changes
         if change.project.job
-          #robot.messageRoom config.room, getMsgForChange(change)
           getMsgForChange robot, change, (msg) ->
             robot.messageRoom config.room, msg
   updateBrain(robot)
 
 startCronJob = (robot) ->
-  job = new cron.CronJob("0 */2 * * * *", ->
+  job = new cron.CronJob("0 */1 * * * *", ->
     crontTick(robot)
   )
   job.start()
