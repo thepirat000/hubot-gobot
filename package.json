@@ -1,7 +1,7 @@
 {
   "name": "hubot-gobot",
   "description": "GoCD integration bot",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "author": "Federico Colombo",
   "license": "MIT",
   "keywords": [ "hubot", "GoCD" ],
