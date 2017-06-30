@@ -32,6 +32,7 @@
 #   21-01-2017 -- federicoc -- added material and instance info -- v0.0.5
 #   27-01-2017 -- federicoc -- fixed bug on changes detection -- v0.0.7
 #   21-03-2017 -- federicoc -- multi-config (server, channel) -- v0.0.8
+#   30-06-2017 -- federicoc -- user/password fix, build details with no config id fix -- v0.0.9
 
 fs = require("fs")
 cron = require("cron")
@@ -85,6 +86,8 @@ config = [ {
     filter: ""      #Regular expression to filter out the pipelines by name
     trigger: ""     #Trigger type, by status change or by date change ("status" or "date", default is "status")
     material: ""    #Indicate if the script should fetch material info ("on" or "off", default is "on")
+    user: ""    
+    passw: ""    
 } ]
 
 rooms = { }
@@ -95,6 +98,8 @@ loadConfig = (robot) ->
     config[0].filter = process.env.HUBOT_GOCI_PROJECTNAME_REGEXP
     config[0].trigger = process.env.HUBOT_GOCI_TRIGGER ? "status"
     config[0].material = process.env.HUBOT_GOCI_FETCH_MATERIALS ? "on"
+    config[0].user = process.env.HUBOT_GOCD_USERNAME
+    config[0].passw = process.env.HUBOT_GOCD_PASSWORD
     i = 0
     for c in robot.brain.data.config
         while (config.length <= i)
@@ -124,6 +129,10 @@ module.exports = (robot) ->
     robot.respond /build status$/i, (msg) ->
         i = getLocalConfigIndex msg
         buildStatus(robot, msg, i)
+
+    robot.respond /build details\s*$/i, (msg) ->
+        i = getLocalConfigIndex msg
+        buildDetails(robot, msg, i)
 
     robot.respond /build details\s+(\D.+)+/i, (msg) ->
         i = getLocalConfigIndex msg
@@ -182,17 +191,21 @@ configGet = (robot, msg) ->
     if msg.match.length > 2
         i = getConfigIndex msg.match[1]
         qry = msg.match[2].trim()
-        if config[i].hasOwnProperty(qry)
+        if (config[i].hasOwnProperty(qry) && qry != "passw")
             msg.send config[i][qry]
         else if qry is "brain"
             msg.send JSON.stringify robot.brain.data.gociProjects[i]
         else if qry is "*"
-            msg.send JSON.stringify config[i]
+            sconfig = JSON.parse JSON.stringify config[i]
+            sconfig.passw = "***"
+            msg.send JSON.stringify sconfig
 
 configGetAll = (robot, msg) ->
     message = ""
     for i in [0...config.length]
-        message += "#{i}: #{JSON.stringify config[i]}\n"
+        sconfig = JSON.parse JSON.stringify config[i]
+        sconfig.passw = "***"
+        message += "#{i}: #{JSON.stringify(sconfig)}\n"
     msg.send message
 
 configSet = (robot, msg) ->
@@ -249,7 +262,7 @@ fetchInstanceInfo = (i, robot, pipeline, id, callback) ->
         callback? pipeline, []
         return
     url = pipelineInstanceUrl(i, pipeline, id)
-    request = getRequest(robot, url)
+    request = getRequest(i, robot, url)
     request.get() (err, res, body) ->
         if not err
             try
@@ -315,6 +328,7 @@ getLocalConfigIndex = (msg) ->
         room = rooms[room_id]
         for i in [0...config.length]
                 if (config[i].room == room)
+                    msg.send "Querying server #{config[i].server}..."
                     return i
     return 0    
 
@@ -389,9 +403,10 @@ getMsgForChange = (i, robot, change, callback) ->
             message.attachments[0].pretext = "Materials: #{material}"
         callback? message
 
-getRequest = (robot, url) ->
-    user = process.env.HUBOT_GOCD_USERNAME
-    pass = process.env.HUBOT_GOCD_PASSWORD
+getRequest = (i, robot, url) ->
+    if (i > 0)
+        user = config[i].user
+        pass = config[i].passw
     options =
         ca: tlsCaFile(robot)
         rejectUnauthorized: rejectUnauthorized()
@@ -404,7 +419,7 @@ getRequest = (robot, url) ->
     request
 
 parseData = (i, robot, callback) ->
-    request = getRequest(robot, cctrayUrl(i))
+    request = getRequest(i, robot, cctrayUrl(i))
     request.get() (err, res, body) ->
         if not err
             regExp = new RegExp(config[i].filter ? ".*", "i")
@@ -471,21 +486,21 @@ resetBrain = (robot, index) ->
     updateBrain(robot)
 
 tlsCaFile = (robot) ->
-	if (typeof process.env.HUBOT_GOCI_TLS_CA_FILE isnt "undefined")
-		return fs.readFileSync(process.env.HUBOT_GOCI_TLS_CA_FILE, "utf-8")
-	else
-		return undefined
+    if (typeof process.env.HUBOT_GOCI_TLS_CA_FILE isnt "undefined")
+        return fs.readFileSync(process.env.HUBOT_GOCI_TLS_CA_FILE, "utf-8")
+    else
+        return undefined
 
 rejectUnauthorized = () ->
-	if (process.env.HUBOT_GOCI_TLS_REJECT_UNAUTHORIZED?)
-		return JSON.parse(process.env.HUBOT_GOCI_TLS_REJECT_UNAUTHORIZED)
-	else
-		return true
+    if (process.env.HUBOT_GOCI_TLS_REJECT_UNAUTHORIZED?)
+        return JSON.parse(process.env.HUBOT_GOCI_TLS_REJECT_UNAUTHORIZED)
+    else
+        return true
 
 #Fetch the room info to be able to map room_id->name
 fetchRoomInfo = (robot) ->
     url = roomInfoUrl()
-    request = getRequest(robot, url)
+    request = getRequest(-1, robot, url)
     request.get() (err, res, body) ->
         if not err and res.statusCode == 200
             json = JSON.parse body
